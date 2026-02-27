@@ -1,0 +1,17 @@
+# R session files
+.RData
+.RDataTmp
+.Rhistory
+.Rproj.user/
+
+# Credentials (used by Appendix B LLM code)
+.env
+
+# Compiled output — HTML report tracked, all others excluded
+*.html
+!simpsons_familyguy_report.html
+*.pdf
+
+# OS metadata
+.DS_Store
+Thumbs.db

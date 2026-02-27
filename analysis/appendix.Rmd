@@ -1,0 +1,1047 @@
+---
+title: "Appendice"
+author: 'Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia '
+output: html_document
+date: "2025-06-14"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## APPENDICE A: *SCRAPING*
+
+### A1. *SCRAPING* TESTI
+Per ottenere i dati necessari all'analisi testuale, è stato implementato un codice di *web scraping* in `R` tramite il pacchetto `rvest`.
+L'obiettivo era l'estrazione delle trascrizioni complete di tutti gli episodi de *I Simpson* e *I Griffin* dal sito *Springfield!Springfield!*, archivio *online* di *script* televisivi.
+Il codice si articola in diverse fasi. Innanzitutto, si effettua il *parsing* della pagina principale della serie desiderata, individuando e raccogliendo i *link* relativi ai singoli episodi. Per ogni episodio, si costruisce quindi l'URL completo, da cui estrarre il testo dello *script*.
+Infine, per ottimizzare il processo ed evitare errori legati al sovraccarico di memoria o di connessioni aperte, l’estrazione degli script è stata organizzata in *batch* di 50 episodi.
+Il risultato finale dell’intero processo è un *data frame* (`df_script`) contenente, per ciascun episodio, l’URL sorgente e il testo completo dello *script* associato. Questo *dataset* rappresenta la base su cui sono state condotte le successive analisi linguistiche e testuali.
+
+```{r APPENDICE A, echo=TRUE, eval=FALSE}
+library(rvest) 
+library(tidyverse)
+library(httr)
+library(purrr)
+library(dplyr)
+library(stringr)
+
+# 1. Legge la pagina principale
+url_base <- "https://www.springfieldspringfield.co.uk"
+url_lista <- paste0(url_base, "/episode_scripts.php?tv-show=the-simpsons")
+pagina <- read_html(url_lista) #parsing HTML con rvest
+
+# 2. Estrazione link episodi
+link_episodi <- pagina %>%
+  html_elements(".season-episode-title") %>% #selettore CSS
+  html_attr("href") %>%
+  na.omit()
+
+# 3. Costruzione URL completi
+link_completi <- paste0(url_base, link_episodi)
+
+# 4. Funzione per estrarre il testo dello script da ogni pagina episodio
+estrai_script <- function(url) {
+  Sys.sleep(1)  # evita di sovraccaricare il sito
+  
+  pagina_ep <- tryCatch({
+    con <- url(url)  # crea connessione
+    html <- read_html(con) 
+    close(con)       # chiudi connessione
+    html
+  }, error = function(e) return(NA)) #gestione errori
+
+  if (is.na(pagina_ep)) return(NA) #skip su fallimento
+
+  testo <- pagina_ep %>%
+    html_element(".scrolling-script-container") %>% #selettore contenuto
+    html_text(trim = TRUE)   #estrazione testo
+
+  return(testo)
+}
+
+# 5. Estrae gli script in batch per evitare errori di connessione
+script_episodi <- c()
+
+for (i in seq(1, length(link_completi), by = 50)) {
+  message("Processing batch: ", i, " to ", min(i + 49, length(link_completi)))
+  batch <- link_completi[i:min(i + 49, length(link_completi))]
+  script_batch <- map_chr(batch, estrai_script) #applica funzione a ogni URL
+  script_episodi <- c(script_episodi, script_batch)
+  closeAllConnections()  #pulizia connessioni residue
+}
+
+# 6. Creazione data frame finale
+df_script <- data.frame(
+  url = link_completi,
+  script = script_episodi,
+  stringsAsFactors = FALSE
+)
+
+# 7. Visualizzazione primi episodi per controllare
+#head(df_script$script, 1)
+
+```
+
+### A2. *SCRAPING* IMDB 
+Un secondo *script* di *scraping* è stato realizzato per raccogliere da IMDB i riassunti testuali e i *rating* degli utenti relativi a tutti gli episodi delle serie *I Simpson* e *I Griffin*.
+I riassunti sono stati impiegati come base descrittiva per supportare l’interpretazione dei *topic* generati tramite LDA, mentre i *rating* sono stati utilizzati per analisi esplorative bivariate, in relazione a stagioni, *topic* e *sentiment*.
+In seguito, per garantire l’allineamento tra le fonti, sono state effettuate alcune correzioni manuali: esclusione di episodi fuori sequenza, rinumerazione parziale e creazione di un identificativo unico (doc_id) per ogni episodio, utile per le fasi successive dell’analisi.
+
+```{r, echo=TRUE, eval=FALSE}
+# Scraping IMDB ####
+
+imdb <- tibble(rating = integer(),
+               serie = character(),
+               stagione = integer(),
+               episodio = integer(),
+               riassunto = character())
+
+# URL base di IMDB per la costruzione degli indirizzi specifici
+url_base_imdb <- "https://www.imdb.com"
+
+#Loop per estrarre i dati di tutte le 36 stagioni de I Simpson
+for(i in 1:36){
+  print(i) #stagione in elaborazione
+  
+  #Estrazione dei rating degli episodi della stagione i
+  ratings <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0096697/episodes/?season=",i,"&ref_=ttep"))) %>%
+    html_elements(".ipc-rating-star--rating") %>% #selettore per rating
+    html_text2() %>% #estra testo
+    str_replace_all(",", ".") %>% 
+    as.numeric()
+  
+  #estrazione riassunti degli episodi della stagione i
+  riassunto <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0096697/episodes/?season=",i,"&ref_=ttep"))) %>%
+    html_elements(".ipc-html-content-inner-div") %>% #selettore CSS
+    html_text2() #estrazione testo
+  
+  #aggiunta dei dati estratti al tibble principale
+  imdb <- bind_rows(imdb,
+                    tibble(rating = ratings,
+                    serie = rep("S", length(ratings)),
+                    stagione = rep(i, length(ratings)),
+                    episodio = 1:length(ratings),
+                    riassunto = riassunto))
+}
+
+#Stesso codice per le 22 stagioni dei Griffin
+for(i in 1:22){
+  print(i)
+  ratings <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0182576/episodes/?season=",i,"&ref_=ttep"))) %>%
+    html_elements(".ipc-rating-star--rating") %>%
+    html_text2() %>%
+    str_replace_all(",", ".") %>%
+    as.numeric()
+  riassunto <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0182576/episodes/?season=",i,"&ref_=ttep"))) %>%
+    html_elements(".ipc-html-content-inner-div") %>%
+    html_text2()
+  imdb <- bind_rows(imdb,
+                    tibble(rating = ratings,
+                    serie = rep("G", length(ratings)),
+                    stagione = rep(i, length(ratings)),
+                    episodio = 1:length(ratings),
+                    riassunto = riassunto))
+}
+
+#Estrazione speciale per la stagione 23 dei Griffin(in corso)
+ratings_g23 <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0182576/episodes/?season=",23,"&ref_=ttep"))) %>%
+  html_elements(".ipc-rating-star--rating") %>%
+  html_text2() %>%
+  str_replace_all(",", ".") %>%
+  as.numeric()
+riassunto_g23 <- read_html(paste0(url_base_imdb, paste0("/it/title/tt0182576/episodes/?season=",23,"&ref_=ttep"))) %>%
+  html_elements(".ipc-html-content-inner-div") %>%
+  html_text2()
+
+#Aggiunta della stagione 23 al dataset completo
+imdb <- bind_rows(imdb,
+                  tibble(rating = ratings_g23,
+                         serie = rep("G", length(ratings_g23)),
+                         stagione = rep(i, length(ratings_g23)),
+                         episodio = 1:length(ratings_g23),
+                         riassunto = riassunto_g23[1:13]))
+
+#Creazione di id univoco per ogni episodio
+imdb$doc_id <- paste0(imdb$serie,"_S", ifelse(imdb$stagione < 10, paste0("0", imdb$stagione), imdb$stagione),
+                                "_E", ifelse(imdb$episodio < 10, paste0("0", imdb$episodio), imdb$episodio))
+
+################################################################################
+
+#POST-PROCESSING E ALLINEAMENTO
+# sistemazione episodi che non coincidono con il nostro dataset
+
+# in simpson: ep. 36.0 diventa 36.10
+# in griffin: 23.0 diventa 22.17
+
+# in imdb: simpson da togliere: 36.13, 36.17, 36.20, 36.21
+# in imdb: griffin da togliere: ultimi 3 di stagione 4, ultimi 3 ultima stagione, 8.21
+
+imdb = imdb[-c(780,784,787,788, 866:868,935,1225:1227),] # episodi tolti
+
+# modifico griffin
+griffin$episodio[421] = 16
+griffin$episodio[422] = 17
+griffin$stagione[422] = 22
+
+# modifico simpson
+print("Stagione 36 originale:")
+simpson %>% filter(stagione == 36) %>% print()
+
+# Eseguiamo la modifica
+simpson <- simpson %>%
+  mutate(
+    # Condizione per applicare le modifiche: solo per la stagione 36
+    episodio = if_else(
+      stagione == 36,
+      # Applica la logica di spostamento solo agli episodi della stagione 36
+      case_when(
+        episodio == 0 ~ 10,           # L'episodio 0 diventa 10
+        episodio >= 10 ~ episodio + 1, # Gli episodi dal 10 in poi scalano di 1
+        TRUE ~ episodio               # Tutti gli altri episodi della stagione 36 rimangono invariati
+      ),
+      # Se non è la stagione 36, l'episodio rimane invariato
+      episodio
+    )
+  ) %>%
+  # Dopo la modifica, è buona norma riordinare gli episodi all'interno della stagione
+  arrange(stagione, episodio)
+
+# Visualizziamo la tibble dopo la modifica (solo la stagione 36)
+print("Stagione 36 dopo la modifica:")
+simpson %>% filter(stagione == 36) %>% print()
+
+simpson$episodio[609:617] = simpson$episodio[609:617]-1
+
+
+imdb_prime_784 <- head(imdb, 784)
+imdb_restanti <- tail(imdb, nrow(imdb) - 784)
+# 2. Applica la rinumerazione solo alla prima parte.
+imdb_prime_784_rinumerate <- imdb_prime_784 %>%
+  group_by(stagione) %>%
+  # Sovrascrivi direttamente la colonna 'episodio' con i nuovi numeri consecutivi
+  mutate(episodio = row_number()) %>%
+  ungroup()
+# 3. Ricombina le due parti del dataframe.
+imdb <- bind_rows(imdb_prime_784_rinumerate, imdb_restanti)
+rm(imdb_prime_784, imdb_prime_784_rinumerate, imdb_restanti)
+gc()
+
+imdb$doc_id <- paste0(imdb$serie,"_S", ifelse(imdb$stagione < 10, paste0("0", imdb$stagione), imdb$stagione),
+                      "_E", ifelse(imdb$episodio < 10, paste0("0", imdb$episodio), imdb$episodio))
+
+
+#save(imdb, file="../data/raw/imdb_ratings.RData")
+
+```
+
+## APPENDICE B: PULIZIA CON API DI LLM 
+In questa sezione viene descritto un tentativo di pulizia automatizzata dei testi, utilizzando un *Large Language Model* implementato con l'API di DeepInfra. È riportato solo il codice per il *dataset* relativo a *I Griffin*, a scopo illustrativo.
+
+L'obiettivo consisteva nella correzione automatica di errori difficili da gestire con strumenti tradizionali, quali errori di OCR o problemi ed inconsistenze di formattazione.
+
+Tuttavia, dopo un'accurata valutazione, questo approccio è stato scartato a favore di una pulizia manuale in `R`, poiché l'LLM introduceva modifiche indesiderate, tra cui: frasi ripetute, parti del *prompt* occasionalmente incluse nell'*output*, frasi mancanti e occasionali "allucinazioni".
+Sebbene questi errori fossero rari nell'*output*, si è deciso di abbandonare questa strada in quanto i benefici erano azzerati dalle successive elaborazioni manuali che si sono rivelate necessarie.
+La pulizia manuale in `R` (con *regex* e controlli visivi) si è rivelata più affidabile in questo contesto.
+
+
+Il codice per la pulizia tramite LLM, scritto in python, si articolava in più fasi: 
+
+1. Caricamento dei dati già pre-processati parzialmente in `R`
+
+2. Configurazione dell'API DeepInfra, con caricamento della chiave.
+
+3. Calcolo dei *token* massimi, necessario per la funzione 'correggi_testo'.
+Nel caso de *I Griffin*, mostrato nel codice, i *token* massimi per chiamata sono 9971.
+
+4. Funzione di correzione 'correggi_testo', che contiene il modello scelto, l'*input* e il *prompt.*
+È stato scelto il modello "mistralai/Mistral-7B-Instruct-v0.3" per avere un compromesso tra prezzo e prestazioni.
+Il *prompt*, scelto dopo vari tentativi, è visibile nel punto 4 del codice.
+
+5. Applicazione e salvataggio.
+Viene chiamato l'API per ogni episodio e la correzione è salvata incrementalmente in un file csv.
+
+```{python API, echo=TRUE, eval=FALSE}
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+import pyreadr
+import pandas as pd
+import time
+import tiktoken
+
+
+# 1. Caricamento dati che hanno avuto una prima pulizia in R
+result = pyreadr.read_r("griffin.RData")
+df_originale = list(result.values())[0]
+colonna_testo = "testo"
+
+# 2. Configurazione API (dal client DeepInfra)
+load_dotenv()
+client = OpenAI(
+    api_key=os.getenv("DEEPINFRA_API_KEY"), #la chiave comprata era su un file dello stesso ambiente
+    base_url="https://api.deepinfra.com/v1/openai"  # endpoint DeepInfra
+)
+
+
+# 3. Trovare i token massimi
+
+#enc = tiktoken.encoding_for_model("gpt-4")  # Tokenizer per Mistral/Mixtral
+
+#3.1 Trova episodio più lungo CON INDICE
+#def trova_episodio_piu_lungo(df, colonna_testo):
+#    max_len = 0
+#    idx_max = 0
+#    for i in range(len(df)):
+#        testo = df.loc[i, colonna_testo]
+#        if len(testo) > max_len:
+#            max_len = len(testo)
+#            idx_max = i
+#    return idx_max, max_len
+
+#3.2 Calcolo preciso
+#idx_episodio, max_caratteri = trova_episodio_piu_lungo(df_originale, colonna_testo)
+#episodio_lungo = df_originale.loc[idx_episodio, colonna_testo]
+#token_massimi = len(enc.encode(episodio_lungo))+500 #stima dei token nel episodio piu lungo+500 per sicurezza
+
+#print(f"Episodio più lungo: n°{idx_episodio+1}") #144
+#print(f"• Caratteri: {max_caratteri}") #36574
+#print(f"• Token reali: {token_massimi}") #9971
+
+token_massimi = 9971
+
+# 4. Funzione per correggere un singolo testo 
+def correggi_testo(testo):
+    try:
+        response = client.chat.completions.create(
+            model="mistralai/Mistral-7B-Instruct-v0.3",  # Modello da DeepInfra
+            messages=[
+                {"role": "system", "content": """Correct the following Family Guy episode transcript with these rules:
+1. Fix ONLY these error types:
+   - Missing letters ('vey' → 'very')
+   - Missing spaces ('ofmy' → 'of my')
+   - OCR errors ('0' → 'O', '1' → 'I')
+
+2. PRESERVE:
+   - All proper nouns (e.g. 'Quahog')
+   - Character-specific speech patterns
+   - Original punctuation and formatting
+   - Exact dialogue structure
+
+3. SPECIAL INSTRUCTIONS:
+   - Never truncate or repeat lines
+   - Maintain original line breaks
+   - Keep all dialogue tags
+   - Return COMPLETE text only
+
+Return ONLY the corrected text with NO additional commentary."""},
+                {"role": "user", "content": testo}
+            ],
+            temperature=0.3,
+            max_tokens=token_massimi
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Errore durante la correzione: {e}")
+
+# 5. File di output
+output_file = "griffin_corretti2.csv"
+
+# 6. Carica il file esistente o inizia da zero (per non sovrascrivere i dati caricati in chiamate precedenti)
+try:
+    df_corretti = pd.read_csv(output_file)
+    print(f"Caricate correzioni esistenti...")
+except FileNotFoundError:
+    df_corretti = df_originale.copy()
+    print("File non trovato. Creo nuovo file...")
+
+# 7. Applica la correzione a ogni riga(a ogni episodio)
+for i in range(len(df_originale)):
+    start_time = time.time()
+    df_corretti.loc[i, colonna_testo] = correggi_testo(df_originale.loc[i, colonna_testo])
+    elapsed_time = time.time() - start_time
+    print(f"✓ Episodio {i+1} tradotto in {elapsed_time:.2f} secondi")
+
+# 8. Salvataggio
+df_corretti.to_csv(output_file, index=False)
+```
+
+
+
+## APPENDICE C: *PRE-PROCESSING*
+
+Dopo aver caricato i *dataset* `griffin_df` e `simpson_df`, contenenti i testi degli episodi delle rispettive serie, è stata eseguita una pulizia iniziale con espressioni regolari per rimuovere elementi potenzialmente fuorvianti per l'analisi.
+
+Le operazioni eseguite includono:
+
+-   Rimozione di caratteri speciali
+
+-   Rimozione di suoni
+
+-   Compattazione degli spazi
+
+Ogni serie ha richiesto ulteriori passaggi di pulizia, adattati alle peculiarità dei rispettivi *script.* Ad esempio, in *I Griffin* è stata rimossa la sigla, con le diverse varianti. Mentre ne *I Simpson* sono stati tolti ulteriori caratteri ASCII non standard ed identificatori delle puntate.
+
+
+```{r load_data, include=FALSE, eval=F}
+# carichiamo i file 
+
+load("../data/raw/familyguy_scripts.RData")
+load("../data/raw/simpsons_scripts.RData")
+
+```
+
+```{r pulizia, echo=TRUE, eval=FALSE}
+# Pulizia generale
+griffin1 <- griffin_df %>%
+  mutate(testo = str_replace_all(testo, "\\\\+", " ")) %>% #sostituisce uno o piu backslash
+  mutate(testo = gsub("-", " ", testo)) %>% #toglie trattini
+  mutate(testo = str_replace_all(testo, "\\[.*?\\]", " ")) %>% #rimuove tutto il contenuto tra []
+  mutate(testo = str_replace_all(testo, "\\(.*?\\)", " ")) %>% #e tra tonde
+  mutate(testo = str_replace_all(testo, '\"', " ")) %>% #toglie virgolette
+  mutate(testo = str_replace_all(testo, "\\|", " ")) %>% #toglie |
+  mutate(testo = str_squish(testo)) #toglie spazi superflui
+
+
+# Togliere la sigla e nome puntata
+griffin2 <- griffin1 %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He's a family guy"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He 's a family guy"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("1 It seems today that all you see.*?He's a fam ily guy", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("1 It seems today that all you see.*?He's a fam ily guy!", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("1 It seems today that all you see.*?He's a Fam ily Guy", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("1 It seems today that all you see.*?He's a Fam ily Guy!", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He's a Fam ily Guy!", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He's a Fam ily Guy !", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He's aFam ily Guy!", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He 's our family guy !", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?He's our family guy", ignore_case = TRUE), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("Family Guy.*?@elderman"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("^1"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("^!"), " "))
+
+# Togliere la sigla tagliata a metà
+griffin2 <- griffin2 %>%
+  mutate(testo = str_replace_all(testo, regex("It seems today that all you see.*?Lucky there's a man who positively can do All the things that make us", ignore_case = TRUE), " "))
+
+# Togliere voci fuori campo (parole maiuscole seguite da :)
+griffin3 <- griffin2 %>%
+  mutate(testo = str_replace_all(testo, "\\s*[A-Z]+\\s*\\d*\\s*:", " "))
+
+# Togliere "Family Guy" all'inizio
+griffin4 <- griffin3 %>%
+  mutate(testo = str_replace_all(testo, regex("^Family Guy Episode"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("^Family Guy episode"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("^Family Guy"), " ")) %>%
+  mutate(testo = str_replace_all(testo, regex("^Family guy"), " ")) %>%
+  mutate(testo = str_replace_all(testo, "'", " ")) %>% #Rimozione degli apostrofo
+  mutate(testo = str_replace_all(testo, regex("iike", ignore_case = TRUE), "like")) #sostituzione di un errore di trascrizione frequente
+
+griffin4 <- griffin4 %>%
+  mutate(testo = str_replace_all(testo, regex("\\b(didn|shouldn|couldn|wouldn|haven|hasn|isn|aren|wasn|weren|can|don)\\b", ignore_case=TRUE), ""))
+
+
+# Rimozione riga, episodio problematico
+griffin <- griffin4[-144, ] %>%
+  mutate(testo = str_squish(testo)) #toglie spazi superflui
+
+
+# Pulizia Simpson
+simpson <- simpson_df %>%
+  mutate(testo = str_replace_all(testo, "\\\\", " ")) %>%
+  mutate(testo = gsub("-", " ", testo)) %>%
+  mutate(testo = str_replace_all(testo, "\\[.*?\\]", " ")) %>%
+  mutate(testo = str_replace_all(testo, "\\(.*?\\)", " ")) %>%
+  mutate(testo = str_replace_all(testo, "#", " ")) %>%
+  mutate(testo = str_replace_all(testo, '\"', " ")) %>%
+  mutate(testo = str_replace(testo, '^\\s*["“”]?Ah+h!?,?\\s*', " ")) %>%
+  mutate(testo = str_replace(testo, '^\\s*["“”]?[Tt]he Simpsons\\s*["“”]?', " ")) %>%
+  mutate(testo = str_replace(testo, '^\\s*["“”]*[Tt]he Simpsons["“”]*\\s*', " ")) %>%
+  mutate(testo = str_replace(testo, '^\\s*["“”]?D\'oh!?["“”]?\\s*', " ")) %>%
+  mutate(testo = str_replace(testo, '^\\s*["“”]*\\s*The Simpsons\\s*["“”]*\\s*["“”]*\\s*D\'oh!?\\s*["“”]*\\s*', " ")) %>%
+  mutate(testo = str_replace(testo, "\\s*(\\d{1,2}x\\d{1,3}|[Ss]\\d{1,2}[Ee]\\d{1,2})\\b\\s*", " ")) %>%
+  mutate(testo = str_replace(testo, "\\s*\\d+\\s*:", " ")) %>%
+  mutate(testo = str_replace_all(testo, "\\s*[A-Z]+\\s*\\d*\\s*:", " ")) %>%
+  mutate(testo = str_replace_all(testo, "'", " ")) %>%
+  mutate(testo = str_replace_all(testo, "Ã\u0082", "")) %>%
+  mutate(testo = str_replace_all(testo, "Ã\u0083â\u0080\u009aÃ¢â\u0084¢Âª", "")) %>%
+  mutate(testo = str_replace_all(testo, "iike", "like")) %>%
+  mutate(testo = str_replace_all(testo, regex("\\b(didn|shouldn|couldn|wouldn|haven|hasn|isn|aren|wasn|weren|can|don)\\b", ignore_case=TRUE), ""))  %>%
+  mutate(testo = str_squish(testo))
+
+rm(griffin_df, griffin1, griffin2, griffin3, griffin4, simpson_df)
+gc()
+
+```
+
+Per assicurare che vengano trattati come singole entità durante la *tokenizzazione* e l'analisi della frequenza, tutte le varianti di uno stesso personaggio sono state accorpate in un'unica forma. In particolare, per evitare che il cognome del personaggio Mr. Burns venisse confuso con il verbo "burn", è stato adottato un *pattern case-sensitive* che distingue il nome proprio dalle forme verbali omonime in minuscolo.
+
+```{r load-bigrammi, echo=TRUE, eval=FALSE}
+# Bigrammi da unire nei testi
+bigrammi_da_unire <- c(
+  "chief wiggum","sideshow bob","sideshow mel","groundskeeper willie","principal skinner",
+  "blue-haired lawyer","rich texan","mayor quimby","fat tony","lionel hutz","troy mcclure",
+  "artie ziff","rainier wolfcastle","santa's little helper","snowball ii","snowball v",
+  "crazy cat lady","cookie kwan","lindsey naegle","bernice hibbert","sarah wiggum",
+  "johnny tightlips","mr burns","el barto","agnes skinner","peter griffin","lois griffin",
+  "chris griffin","stewie griffin","brian griffin","glenn quagmire","cleveland brown",
+  "joe swanson","bonnie swanson","kevin swanson","susie swanson","mort goldman",
+  "muriel goldman","neil goldman","carter pewterschmidt","barbara pewterschmidt",
+  "carol pewterschmidt","evil monkey","ernie the giant chicken","adam west","dr. hartman",
+  "tom tucker","jake tucker","diane simmons","ollie williams","tricia takanawa",
+  "king butt","human rupert","brain damaged horse","felicia day","ron perlman",
+  "patrick stewart","denise robertson","evil stewie","jesus christ","santa claus"
+)
+
+# Sostituzione con underscore nei testi
+for (bigram in bigrammi_da_unire) {
+  monogram <- gsub(" ", "_", bigram)
+  simpson$testo <- gsub(bigram, monogram, simpson$testo, ignore.case = TRUE)
+  griffin$testo <- gsub(bigram, monogram, griffin$testo, ignore.case = TRUE)
+}
+rm(bigram, monogram, bigrammi_da_unire)
+gc()
+
+
+# Accorpamento dei personaggi sotto unico nome
+# Dizionario: varianti da sostituire per ogni personaggio
+nomi_personaggi_simpson <- list(
+  homer = c("Homer Simpson", "Homer","Homie","Homey", "homer J"),
+  marge = c("Marge Simpson", "Marge", "marjorie"),
+  bart = c("Bart Simpson", "Bart"),
+  lisa = c("Lisa Simpson", "Lisa","Lise"),
+  maggie = c("Maggie Simpson", "Maggie"),
+  abe = c("Abe Simpson", "Grandpa Simpson", "Abe", "abraham"),
+  mrburns = c("mr_burns","Mr Burns", "Burns","Mr. Burns" ,"Montgomery Burns"),
+  smithers = c("Waylon Smithers", "Smithers","Waylon"),
+  ned = c("Ned Flanders", "Ned"),
+  maude = c("Maude Flanders", "Maude","Mrs Flanders"),
+  moe = c("Moe Szyslak", "Moe", "\\bMo\\b"),
+  barney = c("Barney Gumble", "Barney"),
+  lenny = c("Lenny Leonard", "Lenny"),
+  carl = c("Carl Carlson", "Carl"),
+  apu = c("Apu Nahasapeemapetilon", "Apu"),
+  wiggum = c("chief_wiggum","Chief Wiggum", "Wiggum", "Clancy"),
+  ralph = c("Ralph Wiggum", "Ralph"),
+  skinner = c("principal_skinner","Principal Skinner", "Seymour Skinner", "Skinner","Seymour"),
+  krusty = c("Krusty the Clown", "Krusty", "Krusty Klaw","Krusty Clown"),
+  bob = c("sideshow_bob","Sideshow Bob", "Bob"),
+  mel = c("sideshow_mel","Sideshow Mel", "Mel", "melvin"),
+  troy = c("troy_mcclure","Troy McClure", "Troy"),
+  lionel = c("lionel_hutz","Lionel Hutz", "Hutz"),
+  comicguy = c("Comic Book Guy", "Comic Guy"),
+  willie = c("groundskeeper_willie","Groundskeeper Willie", "Willie"),
+  quimby = c("mayor_quimby","Mayor Quimby", "Quimby","Joe quimby"),
+  hibbert = c("Dr. Hibbert","Dr Hibbert", "Hibbert", "julius hibbert"),
+  nick = c("Dr.Nick","Dr Nick", "Nick","Dr. NIck Riviera"),
+  patty = c("Patty Bouvier", "Patty"),
+  selma = c("Selma Bouvier", "Selma"),
+  television = c("television", "\\btv\\b")
+)
+
+# Funzione per accorpare i nomi del dizionario
+sostituisci_nomi <- function(testo, dizionario) {
+  reduce(names(dizionario), .init = testo, .f = function(testo, nome_standard) {
+    parole <- str_replace_all(dizionario[[nome_standard]], "(\\W)", "\\\\\\1")
+    pattern <- paste0("\\b(", paste(parole, collapse = "|"), ")\\b")
+
+    # Gestione speciale per mr_burns (case-sensitive)
+    if(nome_standard == "mrburns") {
+      # Crea un pattern case-sensitive per Burns per non confonderlo con il verbo 'burn'
+      burns_pattern <- paste0("\\b(", paste(parole, collapse = "|"), ")\\b")
+      str_replace_all(testo, regex(burns_pattern, ignore_case = FALSE), nome_standard)
+    } else {
+      str_replace_all(testo, regex(pattern, ignore_case = TRUE), nome_standard)
+    }
+  })
+}
+
+
+# Griffin
+nomi_personaggi_griffin <- list(
+  peter = c("Peter Griffin", "peter_griffin", "Peter"),
+  lois = c("Lois Griffin", "lois_griffin", "Lois"),
+  meg = c("Meg Griffin", "meg_griffin", "Meg", "Megan"),
+  chris = c("Chris Griffin", "chris_griffin", "Chris"),
+  stewie = c("Stewie Griffin", "stewie_griffin", "Stewie"),
+  brian = c("Brian Griffin", "brian_griffin", "Brian"),
+  quagmire = c("Glenn Quagmire", "glenn_quagmire", "Quagmire","glenn"),
+  cleveland = c("Cleveland Brown", "cleveland_brown", "Cleveland"),
+  joe = c("Joe Swanson", "joe_swanson", "Joe"),
+  bonnie = c("Bonnie Swanson", "bonnie_swanson", "Bonnie"),
+  mort = c("Mort Goldman", "mort_goldman", "Mort"),
+  herbert = c("John Herbert", "Herbert", "the pervert"),
+  tom = c("Tom Tucker", "tom_tucker"),
+  carter = c("Carter Pewterschmidt", "carter_pewterschmidt", "Mr. Pewterschmidt", "Carter"),
+  barbara = c("Barbara Pewterschmidt", "barbara_pewterschmidt", "Barbara"),
+  adam = c("Mayor West", "Adam West", "mayor_west", "Mayor Adam West", "West"),
+  consuela = c("Consuela", "maid"),
+  tricia = c("Tricia Takanawa", "tricia_takanawa", "Tricia"),
+  television = c("television", "\\btv\\b")
+)
+
+# Applicazione nei Simpson
+simpson <- simpson %>%
+  mutate(testo = sostituisci_nomi(testo, nomi_personaggi_simpson))
+
+# Applicazione nei Griffin
+griffin <- griffin %>%
+  mutate(testo = sostituisci_nomi(testo, nomi_personaggi_griffin))
+
+```
+
+Tutti i testi sono stati sottoposti a lemmatizzazione, un processo che riduce le parole alla loro forma base per ridurre la variabilità lessicale. La procedura ci permette di concentrarci sul significato più che sul significante.
+
+```{r lemmatize,echo=TRUE, eval=F}
+simpson$testo = lemmatize_strings(simpson$testo)
+griffin$testo = lemmatize_strings(griffin$testo)
+```
+
+
+
+La funzione `elabora_testo` trova i lemmi più frequenti, rimuovendo le *stopwords* standard e i numeri. A partire dalla lista di lemmi più frequenti ottenuta in `frequenze_simpson` e `frequenze_griffin`, sono state definite ulteriori *stopwords* personalizzate: esse includono sia parole troppo rare sia interiezioni o espressioni molto frequenti ma prive di contenuto semantico rilevante. Infine, sono stati esclusi anche tutti i nomi dei personaggi delle due serie, al fine di concentrare l’analisi delle frequenze sulle tematiche e sul lessico caratterizzante i dialoghi.
+
+```{r elabora_testo, echo=TRUE, results="hide", eval=F}
+# Funzione per elaborare un dataset
+elabora_testo <- function(df) {
+  df %>%
+    unnest_tokens(word, testo) %>%             # tokenizzazione
+    filter(!word %in% stop_words$word) %>%     # rimuove le stopwords standard
+    filter(str_detect(word, "^[a-z]+$")) %>%   # toglie i caratteri non alfabetici
+    mutate(lemma = lemmatize_words(word)) %>%  # lemmatizza
+    count(lemma, sort = TRUE) %>%         
+    filter(!lemma %in% stop_words$word)        
+}
+
+frequenze_simpson <- elabora_testo(simpson) %>% rename(word = lemma, n = n)
+frequenze_griffin <- elabora_testo(griffin) %>% rename(word = lemma, n = n)
+
+rm(elabora_testo)
+gc()
+
+# Unione frequenze
+merged_df <- full_join(frequenze_simpson, frequenze_griffin, by = "word", suffix = c("_1", "_2")) %>%
+  replace_na(list(n_1 = 0, n_2 = 0))
+
+# Stopword personalizzate (poco frequenti e lista dei personaggi)
+stopwords_nostre = c(
+  merged_df$word[merged_df$n_1 < 200 & merged_df$n_2 < 170],
+  'huh', 'hmm', 'ooh', 'mmm', 'shh', 'hoo', 'aah', 'ugh', 'hmmm', 'hey', 'uh',
+  'time', 'gonna', 'gasp', 'whoa', 'yea', 'heh', 'yay', 'ohh', 'woo', 'aye',
+  'ahh', 'wee', 'hee', 'aaah', 'whew', 'aha', 'wha', 'boo', 'doo', 'dee', 'arr'
+)
+
+# lista personaggi
+personaggi = c('homer','marge','bart','lisa','maggie','abe','mona','mrburns',
+               'herb','milhouse','kirk','luann','ned','maude','rod','todd',
+               'agnes','seymour','patty','selma','jacqueline','moe','barney',
+               'lenny','carl','apu','manjula','ralph','wiggum','lou',
+               'eddie','krusty','bob','mel',
+               'groundskeeper_willie','skinner','edna','martin',
+               'nelson','sherri','terri','janey','database','kearney',
+               'dolph','jimbo','miss_hoover','dr_hibbert','nick',
+               'professor_frink','comicguy','duffman','snake',
+               'bumblebee_man','disco_stu','sea_captain','gil','agnes_skinner',
+               'otto','kent_brockman','reverend_lovejoy','helen_lovejoy',
+               'judge_snyder','jasper','lunchlady_doris','agnes',
+               'blue-haired_lawyer','rich_texan','quimby','fat_tony',
+               'legs','louie','lionel','troy','artie_ziff',
+               'rainier_wolfcastle','kodos','kang','itchy','scratchy',
+               "santa's_little_helper",'snowball_ii','snowball_v','grumple',
+               'crazy_cat_lady','cookie_kwan','lindsey_naegle','hibbert',
+               'sarah_wiggum','üters','lewis','wendell','shauna','brandine',
+               'cletus','julio','johnny_tightlips','smithers',
+               'matt_groening','el_barto','hugo','amber_simpson','sara_sloane',
+               'rachel_jordan','bonnie_flanders','connie_flanders',
+               'agnes_flanders','agnes_turnipseed','agnes_flanders',
+               'agnes_turnipseed','agnes_flanders','agnes_turnipseed',
+
+               "peter", "lois", "meg", "chris", "stewie", "brian",
+               "quagmire", "cleveland", "joe", "bonnie",
+               "kevin_swanson", "susie_swanson", "mort", "muriel_goldman", "neil_goldman",
+               "carter", "barbara", "carol_pewterschmidt",
+               "herbert", "consuela", "tom", "jake_tucker", "diane_simmons", "ollie_williams",
+               "tricia", "seamus", "dr._hartman", "jerome", "bruce", "connie_d'amico",
+               "vinny", "mayor_west", "adam", "ernie_the_giant_chicken", "evil_monkey",
+               "bertram", "rupert", "loretta_brown", "cleveland_brown_jr.", "roberta_tubbs",
+               "rallo_tubbs", "angela", "death", "buzz_killington", "paddy_tanniger",
+               "al_harrington", "dr._amanda_rebecca", "evil_stewie", "retep", "king_butt",
+               "human_rupert", "brain_damage_horse", "felicia_day", "ron_perlman", "patrick_stewart",
+               "jillian_russell", "denise_robertson", "connie", "shauna", "alice", "babs",
+               "vinny_griffin", "carol", "derek_wilcox", "jesus_christ", "god", "santa_claus",
+               'joe', 'griffin', 'simpson', 'quagmire', 'springfield', 'tom', 'flanders', 'willie',
+               'simpsons', 'griffin', 'glenn', 'bonnie'
+)
+
+rm(merged_df)
+
+
+# Rimozione delle stopword personalizzate e personaggi
+frequenze_simpson <- frequenze_simpson %>% filter(!word %in% c(stopwords_nostre, personaggi))
+frequenze_griffin <- frequenze_griffin %>% filter(!word %in% c(stopwords_nostre, personaggi))
+
+```
+
+
+La funzione `clean_text` si occupa della pulizia e normalizzazione del testo secondo una serie di passaggi successivi: *tokenizzazione*, rimozione delle *stopwords* (sia standard che personalizzate), eliminazione dei caratteri non alfabetici e delle parole brevi (di lunghezza inferiore a tre caratteri, con eccezioni come "tv" o "dr"). La funzione consente inoltre di specificare se rimuovere o mantenere i nomi dei personaggi, attraverso l’argomento remove_personaggi. In questo modo, si ottengono due versioni del dataset: una focalizzata esclusivamente sul lessico tematico e stilistico dei dialoghi (senza personaggi) e una che conserva anche i riferimenti ai personaggi, utile per eventuali analisi legate alla presenza o centralità dei personaggi nei dialoghi.
+```{r clean_text, echo=TRUE eval=F}
+# Funzione per pulizia testo
+clean_text <- function(df, remove_personaggi = TRUE) {
+  sw <- if (remove_personaggi) c(stop_words$word, stopwords_nostre, personaggi)
+  else c(stop_words$word, stopwords_nostre)
+
+  df %>%
+    unnest_tokens(word, testo) %>%
+    filter(!word %in% sw) %>%
+    filter(str_detect(word, "^[a-z]+$")) %>%   # toglie i caratteri non alfabetici
+    filter(nchar(word) > 2 | word %in% c("tv", "dr")) %>%
+    group_by(stagione, episodio) %>%
+    summarise(testo = str_c(word, collapse = " "), .groups = "drop")
+}
+
+# Pulizia testi
+simpson_clean     <- clean_text(simpson, TRUE)  #senza personaggi
+griffin_clean     <- clean_text(griffin, TRUE)
+simpson_clean_2   <- clean_text(simpson, FALSE) #con i personaggi
+griffin_clean_2   <- clean_text(griffin, FALSE)
+
+
+```
+
+## APPENDICE D:  DEFINIZIONE FUNZIONI
+Vengono riportate di seguito delle funzioni utilizzate nel report.
+
+La funzione `create_dtm` costruisce una *Document-Term Matrix* a partire dai testi.
+È pensata per preparare i dati in input per i modelli LDA.
+Il testo viene prima normalizzato tramite *tokenizzazione*, lemmatizzazione e rimozione di stopwords.
+Ogni documento viene identificato da un codice univoco basato su stagione ed episodio.
+La funzione restituisce una DTM che rappresenta la frequenza delle parole nei singoli documenti.
+```{r create_dtm D, echo=TRUE,eval=FALSE}
+# Funzione per creare DTM da testo
+create_dtm <- function(df, stoplist = NULL, prefix = NULL) {
+  df %>%
+    mutate(
+      doc_prefix = if (!is.null(prefix)) {
+        prefix
+      } else if ("prefix" %in% colnames(df)) {
+        prefix  # usa la colonna esistente
+      } else {
+        "X"  # fallback
+      },
+      doc_id = paste0(
+        doc_prefix, "_S", ifelse(stagione < 10, paste0("0", stagione), stagione),
+        "_E", ifelse(episodio < 10, paste0("0", episodio), episodio)
+      )
+    ) %>%
+    unnest_tokens(word, testo) %>%
+    mutate(word = tolower(word)) %>%
+    filter(str_detect(word, "^[a-z]+$")) %>%
+    mutate(word = lemmatize_words(word)) %>%
+    filter(str_detect(word, "^[a-z]+$")) %>%
+    filter(!word %in% stoplist) %>%
+    filter(nchar(word) > 2 | word %in% c("tv", "dr", "mr")) %>%
+    count(doc_id, word) %>%
+    cast_dtm(document = doc_id, term = word, value = n)
+}
+```
+
+
+`analyze_lda_titolati_table` confronta graficamente due modelli LDA stimati sulla combinazione in un'unica DTM delle due serie. In input richiede il numero di *topic* k scelto e i titoli personalizzati dei *topic*. 
+L'obiettivo è confrontare i modelli LDA con e senza i personaggi.
+I due modelli vengono visualizzati uno accanto all’altro con i rispettivi top-terms.
+
+```{r, echo=TRUE,eval=FALSE}
+analyze_lda_titolati_table <- function(lda_list_1 = lda_k, lda_list_2 = lda_k2, k,
+                                 n_top_terms = 50, n_top_docs = 15,
+                                 custom_titles_1 = NULL, custom_titles_2 = NULL) {
+
+  # Estrazione delle matrici beta e gamma
+  word_topics_1 <- tidy(lda_list_1[[k]], matrix = "beta")
+  doc_topics_1 <- tidy(lda_list_1[[k]], matrix = "gamma")
+
+  word_topics_2 <- tidy(lda_list_2[[k]], matrix = "beta")
+  doc_topics_2 <- tidy(lda_list_2[[k]], matrix = "gamma")
+
+  # Creazione dei titoli personalizzati
+  if (is.null(custom_titles_1)) {
+    custom_titles_1 <- paste("Topic", 1:k)
+  }
+  if (is.null(custom_titles_2)) {
+    custom_titles_2 <- paste("Topic", 1:k)
+  }
+
+  # Verifica che il numero di titoli corrisponda al numero di topic
+  if (length(custom_titles_1) != k) {
+    stop(paste("Il numero di titoli per LDA 1 (", length(custom_titles_1),
+               ") non corrisponde al numero di topic (", k, ")"))
+  }
+  if (length(custom_titles_2) != k) {
+    stop(paste("Il numero di titoli per LDA 2 (", length(custom_titles_2),
+               ") non corrisponde al numero di topic (", k, ")"))
+  }
+
+  # Estrazione dei termini principali
+  top_terms_1 <- word_topics_1 %>%
+    group_by(topic) %>%
+    slice_max(beta, n = n_top_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta) %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  top_terms_2 <- word_topics_2 %>%
+    group_by(topic) %>%
+    slice_max(beta, n = n_top_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta) %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Visualizzazione dei termini principali con titoli personalizzati
+  plot1 <- top_terms_1 %>%
+    mutate(term = reorder_within(term, beta, topic_title)) %>%
+    ggplot(aes(beta, term, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic_title, scales = "free") +
+    scale_y_reordered() +
+    labs(title = paste("Top", n_top_terms, "terms per topic (LDA 1 - Senza Personaggi)")) +
+    theme(strip.text = element_text(size = 8))
+
+  plot2 <- top_terms_2 %>%
+    mutate(term = reorder_within(term, beta, topic_title)) %>%
+    ggplot(aes(beta, term, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic_title, scales = "free") +
+    scale_y_reordered() +
+    labs(title = paste("Top", n_top_terms, "terms per topic (LDA 2 - Con Personaggi)")) +
+    theme(strip.text = element_text(size = 8))
+
+  print(plot1)
+  print(plot2)
+
+  # Estrazione dei documenti principali
+  top_docs_1 <- doc_topics_1 %>%
+    group_by(topic) %>%
+    slice_max(gamma, n = n_top_docs) %>%
+    ungroup() %>%
+    arrange(topic, -gamma) %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  top_docs_2 <- doc_topics_2 %>%
+    group_by(topic) %>%
+    slice_max(gamma, n = n_top_docs) %>%
+    ungroup() %>%
+    arrange(topic, -gamma) %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Classificazione dei documenti per topic principale
+  topics_1 <- doc_topics_1 %>%
+    group_by(document) %>%
+    slice_max(gamma, n = 1) %>%
+    ungroup() %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  topics_2 <- doc_topics_2 %>%
+    group_by(document) %>%
+    slice_max(gamma, n = 1) %>%
+    ungroup() %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Nell'ambiente globale
+  assign(paste0("tot", k, "_topics"), topics_1, envir = .GlobalEnv)
+  assign(paste0("tot", k, "_topics_2"), topics_2, envir = .GlobalEnv)
+
+  # Tabelle di controllo con titoli
+  # cat("\n\n### Classificazione per topic - LDA 1 (Senza Personaggi)\n\n")
+  tab1 <- as.data.frame.matrix(table(substr(topics_1$document, 1, 1), topics_1$topic_title))
+  tab1 <- tab1[, c(ncol(tab1), 1:(ncol(tab1)-1))]
+  cat(knitr::kable(tab1, caption = "Distribuzione dei documenti per topic - LDA 1 (Senza Personaggi)", format = "html"))
+
+  # cat("\n\n### Classificazione per topic - LDA 2 (Con Personaggi)\n\n")
+  tab2 <- as.data.frame.matrix(table(substr(topics_2$document, 1, 1), topics_2$topic_title))
+  tab2 <- tab2[, c(ncol(tab2), 1:(ncol(tab2)-1))]
+  cat(knitr::kable(tab2, caption = "Distribuzione dei documenti per topic - LDA 2 (Con Personaggi)", format = "html"))
+
+
+  # Output dei dati utili
+  list(
+    top_terms_1 = top_terms_1,
+    top_terms_2 = top_terms_2,
+    top_docs_1 = top_docs_1,
+    top_docs_2 = top_docs_2,
+    topics_1 = topics_1,
+    topics_2 = topics_2,
+    custom_titles_1 = custom_titles_1,
+    custom_titles_2 = custom_titles_2
+  )
+}
+```
+
+`analyze_lda_serie_titolati` è una variante di `analyze_lda_titolati_table` che, invece di usare la DTM combinata, confronta graficamente due modelli LDA stimati sulla stessa serie, uno senza e uno con in nomi dei personaggi. 
+
+```{r, echo=TRUE,eval=FALSE}
+analyze_lda_serie_titolati <- function(lda_list_1 = lda_k, lda_list_2 = lda_k2, k,
+                                       n_top_terms = 50, n_top_docs = 15, serie_nome = "Serie",
+                                       custom_titles_1 = NULL, custom_titles_2 = NULL) {
+
+  # Estrazione delle matrici beta e gamma
+  word_topics_1 <- tidy(lda_list_1[[k]], matrix = "beta")
+  doc_topics_1 <- tidy(lda_list_1[[k]], matrix = "gamma")
+
+  word_topics_2 <- tidy(lda_list_2[[k]], matrix = "beta")
+  doc_topics_2 <- tidy(lda_list_2[[k]], matrix = "gamma")
+
+  # Creazione dei titoli personalizzati
+  if (is.null(custom_titles_1)) {
+    custom_titles_1 <- paste("Topic", 1:k)
+  }
+  if (is.null(custom_titles_2)) {
+    custom_titles_2 <- paste("Topic", 1:k)
+  }
+
+  # Verifica che il numero di titoli corrisponda al numero di topic
+  if (length(custom_titles_1) != k) {
+    stop(paste("Il numero di titoli per LDA 1 (", length(custom_titles_1),
+               ") non corrisponde al numero di topic (", k, ")"))
+  }
+  if (length(custom_titles_2) != k) {
+    stop(paste("Il numero di titoli per LDA 2 (", length(custom_titles_2),
+               ") non corrisponde al numero di topic (", k, ")"))
+  }
+
+  # Estrazione dei termini principali
+  top_terms_1 <- word_topics_1 %>%
+    group_by(topic) %>%
+    slice_max(beta, n = n_top_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta) %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  top_terms_2 <- word_topics_2 %>%
+    group_by(topic) %>%
+    slice_max(beta, n = n_top_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta) %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Grafici con titoli personalizzati
+  plot1 <- top_terms_1 %>%
+    mutate(term = reorder_within(term, beta, topic_title)) %>%
+    ggplot(aes(beta, term, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic_title, scales = "free") +
+    scale_y_reordered() +
+    labs(title = paste("Top", n_top_terms, "terms per topic (LDA 1 - Senza Personaggi) -", serie_nome)) +
+    theme(strip.text = element_text(size = 8))
+
+  plot2 <- top_terms_2 %>%
+    mutate(term = reorder_within(term, beta, topic_title)) %>%
+    ggplot(aes(beta, term, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic_title, scales = "free") +
+    scale_y_reordered() +
+    labs(title = paste("Top", n_top_terms, "terms per topic (LDA 2 - Con Personaggi) -", serie_nome)) +
+    theme(strip.text = element_text(size = 8))
+
+  print(plot1)
+  print(plot2)
+
+  # Estrazione documenti principali
+  top_docs_1 <- doc_topics_1 %>%
+    group_by(topic) %>%
+    slice_max(gamma, n = n_top_docs) %>%
+    ungroup() %>%
+    arrange(topic, -gamma) %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  top_docs_2 <- doc_topics_2 %>%
+    group_by(topic) %>%
+    slice_max(gamma, n = n_top_docs) %>%
+    ungroup() %>%
+    arrange(topic, -gamma) %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Classificazione per topic dominante
+  topics_1 <- doc_topics_1 %>%
+    group_by(document) %>%
+    slice_max(gamma, n = 1) %>%
+    ungroup() %>%
+    mutate(topic_title = custom_titles_1[topic])
+
+  topics_2 <- doc_topics_2 %>%
+    group_by(document) %>%
+    slice_max(gamma, n = 1) %>%
+    ungroup() %>%
+    mutate(topic_title = custom_titles_2[topic])
+
+  # Nell'ambiente globale
+  assign(paste0("tot", k, "_topics"), topics_1, envir = .GlobalEnv)
+  assign(paste0("tot", k, "_topics_2"), topics_2, envir = .GlobalEnv)
+
+  # Creazione delle tabelle con titoli personalizzati
+  table_1 <- topics_1$topic_title
+  names(table_1) <- topics_1$topic_title
+  table_1 <- table(table_1)
+
+  table_2 <- topics_2$topic_title
+  names(table_2) <- topics_2$topic_title
+  table_2 <- table(table_2)
+
+  # Output utile
+  list(
+    top_terms_1 = top_terms_1,
+    top_terms_2 = top_terms_2,
+    top_docs_1 = top_docs_1,
+    top_docs_2 = top_docs_2,
+    topics_1 = topics_1,
+    topics_2 = topics_2,
+    custom_titles_1 = custom_titles_1,
+    custom_titles_2 = custom_titles_2
+  )
+}
+```
+
+Il codice sottostante implementa la stima di modelli LDA (*Latent Dirichlet Allocation*) su una *Document-Term Matrix*  per un intervallo di valori del numero di topic k.
+La funzione `run_lda` effettua la stima di un singolo modello utilizzando il metodo Gibbs Sampling e restituisce un oggetto LDA pronto per l’analisi.
+Per aumentare l’efficienza computazionale, la stima dei modelli per i diversi valori di k viene eseguita in parallelo tramite il pacchetto *future*, con strategia *multisession*.
+In seguito, viene effettuata un’analisi automatica del numero ottimale di topic utilizzando il pacchetto *ldatuning* e quattro metriche di coerenza tematica: *Griffiths2004*, *CaoJuan2009*, *Arun2010*, *Deveaud2014*.
+
+```{r, echo=TRUE,eval=FALSE}
+
+params <- list(k = 2:10)
+
+# Imposta parallelizzazione (Windows: multisession)
+plan(multisession, workers = future::availableCores()/2)
+
+run_lda <- function(k, dtm) {
+  cat("Avvio stima modello con k =", k, "\n")
+  modello <- topicmodels::LDA(dtm,
+                              k = k,
+                              method = "Gibbs",
+                              control = list(seed = 42,   # Fisso dentro per sicurezza
+                                             burnin = 5000,
+                                             iter = 10000,
+                                             thin = 500,
+                                             verbose = 0))
+  cat("Finito modello con k =", k, "\n")
+  return(modello)
+}
+
+#Parallelizzazione
+lda_k <- c( list(NULL), future_lapply(params$k, function(k) run_lda(k,
+dtm_tot), future.seed = TRUE) )
+
+lda_k2 <- c( list(NULL), future_lapply(params$k, function(k)
+run_lda(k, dtm_tot2), future.seed = TRUE) )
+
+#Funzione per la ricerca del numero ottimale di topic, prova da 5 a 70 topic con passo 5
+result_tot <- FindTopicsNumber( dtm_tot2, topics =
+                                  seq(5, 70, by = 5), metrics = c("Griffiths2004", "CaoJuan2009",
+                                                                  "Arun2010", "Deveaud2014"), method = "Gibbs", control = list(seed =
+                                                                                                                                 1234), mc.cores = detectCores()/2, verbose = TRUE )
+
+#Visualizza dei risultati delle metriche
+FindTopicsNumber_plot(result_tot)
+```
+
