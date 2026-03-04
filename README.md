@@ -26,7 +26,7 @@ Pipeline di analisi in sette fasi:
 6. **Sentiment analysis** (`simpsons_familyguy_analysis.Rmd`, §4) — evoluzione del tono emotivo per stagione
 7. **Correlazioni IMDb** (`simpsons_familyguy_analysis.Rmd`, §5) — relazione tra sentiment/topic e rating
 
-### Repository Structure
+### Struttura del repository
 
 ```
 simpsons-familyguy-nlp/
