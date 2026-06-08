@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this project, please cite it as below."
+type: software
+title: "Comparative Text Analysis: The Simpsons and Family Guy"
+abstract: >
+  Text mining and NLP analysis of The Simpsons and Family Guy scripts. Compares the
+  two shows through word frequency analysis, topic modeling (LDA and STM), and
+  sentiment analysis. Correlates results with IMDb episode ratings.
+authors:
+  - family-names: Caicchiolo
+    given-names: Giorgia
+    affiliation: "University of Padova"
+  - family-names: Carollo
+    given-names: Daniele
+    affiliation: "University of Padova"
+  - family-names: Paganelli
+    given-names: Gabriele
+    affiliation: "University of Padova"
+    email: gabrielepaganelli13@gmail.com
+  - family-names: Pati
+    given-names: Riccardo
+    affiliation: "University of Padova"
+  - family-names: Tossici
+    given-names: Giorgia
+    affiliation: "University of Padova"
+keywords:
+  - text mining
+  - NLP
+  - topic modeling
+  - LDA
+  - STM
+  - sentiment analysis
+  - The Simpsons
+  - Family Guy
+license: MIT
+repository-code: "https://github.com/GabriPaganelli/simpsons-familyguy-nlp"
+date-released: "2026-06-08"
