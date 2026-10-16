@@ -1,6 +1,8 @@
 # Analisi testuale comparativa: I Simpson e I Griffin
 # *Comparative Text Analysis: The Simpsons and Family Guy*
 
+**[Italiano](#italiano) · [English](#english)** · [Report (HTML)](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html) · [Web](https://gabripaganelli.github.io/projects/simpsons-family-guy.html)
+
 ---
 
 ## Italiano
@@ -12,7 +14,7 @@ alle sceneggiature di *I Simpson* e *I Griffin*. L'analisi confronta le due seri
 attraverso analisi delle frequenze, *topic modeling* (LDA e STM) e *sentiment analysis*,
 correlando i risultati con i rating IMDb degli episodi.
 
-**Report compilato:** [`simpsons_familyguy_report.html`](simpsons_familyguy_report.html)
+**Report compilato:** [`simpsons_familyguy_report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html)
 
 ### Metodologia
 
@@ -22,7 +24,7 @@ Pipeline di analisi in sette fasi:
 2. **Pre-processing** (`appendix.Rmd`, Appendice C) — pulizia, tokenizzazione, lemmatizzazione
 3. **Text mining** (`simpsons_familyguy_analysis.Rmd`, §1) — frequenze, keyness, word cloud
 4. **Topic modeling LDA** (`simpsons_familyguy_analysis.Rmd`, §2) — macro-temi per serie
-5. **Topic modeling STM** (`simpsons_familyguy_analysis.Rmd`, §3) — modello strutturale con varia covariate
+5. **Topic modeling STM** (`simpsons_familyguy_analysis.Rmd`, §3) — modello strutturale con varie covariate
 6. **Sentiment analysis** (`simpsons_familyguy_analysis.Rmd`, §4) — evoluzione del tono emotivo per stagione
 7. **Correlazioni IMDb** (`simpsons_familyguy_analysis.Rmd`, §5) — relazione tra sentiment/topic e rating
 
@@ -32,6 +34,8 @@ Pipeline di analisi in sette fasi:
 simpsons-familyguy-nlp/
 ├── README.md
 ├── LICENSE
+├── CITATION.cff
+├── .gitattributes
 ├── simpsons_familyguy_report.html        # Report compilato
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Report principale
@@ -65,7 +69,7 @@ rieseguire scraping e pre-processing.
 ```r
 install.packages(c(
   "cowplot", "dplyr", "future", "future.apply", "ggplot2", "ggwordcloud",
-  "gridExtra", "knitr", "LDAvis", "lda", "lubridate", "parallel",
+  "gridExtra", "knitr", "LDAvis", "lda", "lubridate",
   "patchwork", "quanteda", "quanteda.textstats", "reshape2",
   "RColorBrewer", "SnowballC", "stm", "stringr", "textstem",
   "tidytext", "tidyverse", "tm", "tokenizers", "topicmodels",
@@ -88,6 +92,11 @@ source("plots.R")
 
 ### Risultati
 
+**Risultati principali** (dalle conclusioni del report):
+- *I Griffin* usano un linguaggio più provocatorio (keyness: "hell" e "damn" molto più frequenti), *I Simpson* un registro più neutro
+- Ne *I Simpson* il personaggio centrale passa da Bart a Homer; ne *I Griffin* Peter resta dominante e Stewie cresce nelle stagioni recenti
+- La LDA individua 9 macro-temi comuni alle due serie; il sentiment de *I Simpson* è mediamente più positivo e stabile, quello de *I Griffin* più basso e oscillante
+
 Il report compilato include:
 - Analisi comparative delle frequenze lessicali e keyness tra le due serie
 - I topic LDA identificati per ciascuna serie, con interpretazione tematica
@@ -101,7 +110,7 @@ Il report compilato include:
 
 ### Autori
 
-**Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — Academic Portfolio
+**Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — Università di Padova
 
 ---
 
@@ -114,7 +123,7 @@ scripts of *The Simpsons* and *Family Guy*. The analysis compares the two shows 
 word frequency analysis, *topic modeling* (LDA and STM), and *sentiment analysis*,
 correlating results with IMDb episode ratings.
 
-**Compiled report:** [`simpsons_familyguy_report.html`](simpsons_familyguy_report.html)
+**Compiled report:** [`simpsons_familyguy_report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html)
 
 ### Methodology
 
@@ -134,6 +143,8 @@ Seven-stage analysis pipeline:
 simpsons-familyguy-nlp/
 ├── README.md
 ├── LICENSE
+├── CITATION.cff
+├── .gitattributes
 ├── simpsons_familyguy_report.html        # Compiled report
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Main analysis report
@@ -167,7 +178,7 @@ re-running scraping and pre-processing is not required.
 ```r
 install.packages(c(
   "cowplot", "dplyr", "future", "future.apply", "ggplot2", "ggwordcloud",
-  "gridExtra", "knitr", "LDAvis", "lda", "lubridate", "parallel",
+  "gridExtra", "knitr", "LDAvis", "lda", "lubridate",
   "patchwork", "quanteda", "quanteda.textstats", "reshape2",
   "RColorBrewer", "SnowballC", "stm", "stringr", "textstem",
   "tidytext", "tidyverse", "tm", "tokenizers", "topicmodels",
@@ -190,6 +201,11 @@ source("plots.R")
 
 ### Results
 
+**Key findings** (from the report's conclusions):
+- *Family Guy* uses more provocative language (keyness: "hell" and "damn" far more frequent), *The Simpsons* a more neutral register
+- In *The Simpsons* the central character shifts from Bart to Homer; in *Family Guy* Peter stays dominant and Stewie grows in recent seasons
+- LDA finds 9 macro-topics shared by the two shows; *The Simpsons* sentiment is on average more positive and stable, *Family Guy*'s lower and more volatile
+
 The compiled report includes:
 - Comparative lexical frequency and keyness analysis between the two shows
 - LDA topics identified per series, with thematic interpretation
@@ -203,4 +219,4 @@ The compiled report includes:
 
 ### Authors
 
-**Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — Academic Portfolio
+**Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — University of Padova
