@@ -3,6 +3,9 @@
 
 **[Italiano](#italiano) · [English](#english)** · [Report (HTML)](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html) · [Web](https://gabripaganelli.github.io/projects/simpsons-family-guy.html)
 
+![Keyness](figures/keyness_griffin_simpson.png)
+*Parole più distintive di ciascuna serie (keyness χ², I Griffin vs I Simpson) · Most distinctive words of each show (χ² keyness, Family Guy vs The Simpsons)*
+
 ---
 
 ## Italiano
@@ -37,6 +40,7 @@ simpsons-familyguy-nlp/
 ├── CITATION.cff
 ├── .gitattributes
 ├── simpsons_familyguy_report.html        # Report compilato
+├── figures/                              # Immagine del README
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Report principale
 │   └── appendix.Rmd                      # Appendice: scraping, pre-processing, funzioni
@@ -146,6 +150,7 @@ simpsons-familyguy-nlp/
 ├── CITATION.cff
 ├── .gitattributes
 ├── simpsons_familyguy_report.html        # Compiled report
+├── figures/                              # README image
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Main analysis report
 │   └── appendix.Rmd                      # Appendix: scraping, pre-processing, helper functions
