@@ -9,7 +9,7 @@
 
 # Compiled output — HTML report tracked, all others excluded
 *.html
-!simpsons_familyguy_report.html
+!report.html
 *.pdf
 
 # OS metadata

@@ -17,7 +17,7 @@ alle sceneggiature di *I Simpson* e *I Griffin*. L'analisi confronta le due seri
 attraverso analisi delle frequenze, *topic modeling* (LDA e STM) e *sentiment analysis*,
 correlando i risultati con i rating IMDb degli episodi.
 
-**Report compilato:** [`simpsons_familyguy_report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html)
+**Report compilato:** [`report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html) (ospitato sul sito: GitHub non renderizza i file HTML)
 
 ### Metodologia
 
@@ -39,7 +39,7 @@ simpsons-familyguy-nlp/
 ├── LICENSE
 ├── CITATION.cff
 ├── .gitattributes
-├── simpsons_familyguy_report.html        # Report compilato
+├── report.html                           # Report compilato
 ├── figures/                              # Immagine del README
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Report principale
@@ -127,7 +127,7 @@ scripts of *The Simpsons* and *Family Guy*. The analysis compares the two shows 
 word frequency analysis, *topic modeling* (LDA and STM), and *sentiment analysis*,
 correlating results with IMDb episode ratings.
 
-**Compiled report:** [`simpsons_familyguy_report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html)
+**Compiled report:** [`report.html`](https://gabripaganelli.github.io/assets/pdfs/reports/text-analysis-report.html) (hosted on the website: GitHub does not render HTML files)
 
 ### Methodology
 
@@ -149,7 +149,7 @@ simpsons-familyguy-nlp/
 ├── LICENSE
 ├── CITATION.cff
 ├── .gitattributes
-├── simpsons_familyguy_report.html        # Compiled report
+├── report.html                           # Compiled report
 ├── figures/                              # README image
 ├── analysis/
 │   ├── simpsons_familyguy_analysis.Rmd   # Main analysis report
