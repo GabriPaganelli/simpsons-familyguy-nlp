@@ -108,13 +108,14 @@ Il report compilato include:
 - Evoluzione del sentiment per stagione e correlazione con i rating IMDb
 - Modelli salvati in `data/models/` per riproducibilità senza ricalcolo
 
-**Fonti dei dati:**
-- [Springfield! Springfield!](https://www.springfieldspringfield.co.uk/) — uso accademico/non commerciale
-- [IMDb](https://www.imdb.com/) — rating e riassunti episodi
-
 ### Autori
 
 **Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — Università di Padova
+
+### Fonti dei dati
+
+- [Springfield! Springfield!](https://www.springfieldspringfield.co.uk/) — uso accademico/non commerciale
+- [IMDb](https://www.imdb.com/) — rating e riassunti episodi
 
 ---
 
@@ -218,10 +219,11 @@ The compiled report includes:
 - Sentiment evolution across seasons and correlation with IMDb ratings
 - Fitted models saved in `data/models/` for reproducibility without recomputation
 
-**Data sources:**
-- [Springfield! Springfield!](https://www.springfieldspringfield.co.uk/) — academic and non-commercial use only
-- [IMDb](https://www.imdb.com/) — scraped user ratings and episode summaries
-
 ### Authors
 
 **Caicchiolo Giorgia, Carollo Daniele, Paganelli Gabriele, Pati Riccardo, Tossici Giorgia** — University of Padova
+
+### Data sources
+
+- [Springfield! Springfield!](https://www.springfieldspringfield.co.uk/) — academic and non-commercial use only
+- [IMDb](https://www.imdb.com/) — scraped user ratings and episode summaries
